@@ -59,7 +59,7 @@ if __name__ == "__main__":
 
     while True:
         response = ""
-        req = input("Enter a command: profile1 | profile2 | plot | reset | exit ").upper()
+        req = input("Enter a command: profile1 | profile2 | profile | plot | reset | exit ").upper()
 
         if req == "PROFILE1":
             print("Initiating depth profile 1")
@@ -67,6 +67,17 @@ if __name__ == "__main__":
         elif req == "PROFILE2":
             print("Initiating depth profile 2")
             requests.get(miniserver + "profile2") 
+        elif req == "PROFILE":
+            depth = None
+            while True:
+                try:
+                    depth = float(input("Enter depth in meters: "))
+                except ValueError:
+                    continue
+                break
+            depth = str(depth)
+            print(f"Initiating depth profile")
+            requests.post(miniserver + "profile", data=depth, headers=timeheader)
         elif req == "PLOT":
             print("Retrieving data...")
             response = requests.get(miniserver + "plot")

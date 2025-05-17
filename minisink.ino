@@ -16,9 +16,9 @@ bool handling_request = false;
 bool already_sank = false;
 
 //constants for stepper distance
-#define CM_PER_REVOLUTION 8
-#define MAX_DISTANCE 8
-#define STEPS_PER_REVOLUTION 200
+#define CM_PER_REVOLUTION 8.0
+#define MAX_DISTANCE 6.5
+#define STEPS_PER_REVOLUTION 200.0
 #define MAX_STEPS ((MAX_DISTANCE / CM_PER_REVOLUTION) * STEPS_PER_REVOLUTION)
 
 //sensor and motor pins
@@ -26,8 +26,8 @@ bool already_sank = false;
 #define IN2 37
 #define IN3 36
 #define IN4 35
-#define SDA_PIN 12
-#define SCL_PIN 13
+#define SDA_PIN 4
+#define SCL_PIN 5
 
 const char* ssid = "MiniSink";
 const char* password = "minisink";
@@ -110,6 +110,8 @@ void profile1() {
   dive_csv += readData(0);
   unsigned long start_time = millis();
   unsigned long current_time;
+
+  //start sinking
   while (sensor.depth() < 2.4) {
     delay(1000);
     current_time = (millis() - start_time) / 1000;
@@ -120,6 +122,7 @@ void profile1() {
   }
   toggle_sinkfloat(false);
 
+  //start floating
   while (sensor.depth() > 0.2) {
     delay(1000);
     current_time = (millis() - start_time) / 1000;
@@ -145,6 +148,8 @@ void profile2() {
   dive_csv += readData(0);
   unsigned long start_time = millis();
   unsigned long current_time;
+
+  //start sinking
   while (sensor.depth() < 3.5) {
     delay(1000);
     current_time = (millis() - start_time) / 1000;
@@ -155,6 +160,8 @@ void profile2() {
     miniserver.handleClient();  //check for reset request
   }
   toggle_sinkfloat(false);
+
+  //start floating
   while (sensor.depth() > 0.2) {
     delay(1000);
     current_time = (millis() - start_time) / 1000;
@@ -177,6 +184,8 @@ void profile2() {
     miniserver.handleClient();  //check for reset request
   }
   toggle_sinkfloat(false);
+
+  //start floating
   while (sensor.depth() > 0.2) {
     delay(1000);
     current_time = (millis() - start_time) / 1000;
@@ -185,6 +194,46 @@ void profile2() {
     }
 
     miniserver.handleClient();  //check for reset request
+  }
+
+  handling_request = false;
+}
+void profile() {
+  String body = miniserver.arg("plain");
+  float depth = body.toFloat();
+  depth -= 0.65;    //account for sensor at top of 
+  miniserver.send(200, "text/plain", "Profile initiated");
+
+  if (handling_request) {
+    return;
+  }
+  handling_request = true;
+
+  dive_csv = "time,depth,pressure,temperature\n";
+  toggle_sinkfloat(true);
+  dive_csv += readData(0);
+  unsigned long start_time = millis();
+  unsigned long current_time;
+
+  // start sinking
+  while (sensor.depth() < depth) {
+    delay(1000);
+    current_time = (millis() - start_time) / 1000;
+    if (current_time % 5 == 0) {
+      dive_csv += readData(current_time);
+    }
+
+    miniserver.handleClient();  //check for reset request
+  }
+  toggle_sinkfloat(false);
+
+  //start floating
+  while (sensor.depth() > 0.1) {
+    delay(1000);
+    current_time = (millis() - start_time) / 1000;
+    if (current_time % 5 == 0) {
+      dive_csv += readData(current_time);
+    }
   }
 
   handling_request = false;
@@ -223,11 +272,11 @@ void setup() {
   Serial.println("Setting up Access Point...");
   if (!WiFi.softAPConfig(localIP, gateway, subnet)) {
     log_e("Static IP config failed.");
-    while (1);
+    ESP.restart();
   }
   if (!WiFi.softAP(ssid, password)) {
     log_e("Soft AP creation failed.");
-    while (1);
+    ESP.restart();
   }
   IPAddress myIP = WiFi.softAPIP();
   Serial.print("AP IP address: ");
@@ -241,6 +290,7 @@ void setup() {
   miniserver.on("/profile1", profile1);
   miniserver.on("/profile2", profile2);
   miniserver.on("/plot", plot);
+  miniserver.on("/profile", HTTP_POST, profile);
   miniserver.begin();
   Serial.println("Server started\n\n"); 
 }
